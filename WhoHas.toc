@@ -1,8 +1,9 @@
 ## Interface: 11200
-## Title: WhoHas [MOD]
-## Version: 2.3.3-mod
-## Author: Gruma, Roadblock, Codex
-## Notes: Adds Possessions bag and bank counts to chat item tooltips for the current character and stored alts.
+## Title: WhoHas
+## Version: 0.1
+## Author: ellugia
+## X-Credits: road-block, refaim
+## Notes: Shows Possessions bag and bank counts in item tooltips for the current character and same-realm alts.
 ## SavedVariables: WhoHasModConfig
 ## OptionalDeps: Possessions
 ## RequiredDeps:
