@@ -13,6 +13,7 @@ WhoHasMod.state = {
    inventoryChanged = 1,
    playerCache = {},
    altCache = {},
+   warnedMissingBackend = nil,
 }
 
 WhoHasMod.categories = {
@@ -66,6 +67,7 @@ function WhoHasMod.OnEvent()
       WhoHasMod.state.player = UnitName("player") or "";
       WhoHasMod.state.realm = GetRealmName() or "";
       WhoHasMod.state.inventoryChanged = 1;
+      WhoHasMod.MaybeWarnMissingBackend();
    elseif (event == "UNIT_INVENTORY_CHANGED") then
       if (arg1 == "player") then
          WhoHasMod.MarkDirty();
@@ -77,6 +79,30 @@ end
 
 function WhoHasMod.MarkDirty()
    WhoHasMod.state.inventoryChanged = 1;
+end
+
+function WhoHasMod.HasUsableBackend()
+   if (not PossessionsData or not WhoHasMod.state.realm or WhoHasMod.state.realm == "") then
+      return nil;
+   end
+
+   local realmData = PossessionsData[WhoHasMod.state.realm];
+   if (type(realmData) ~= "table" or not next(realmData)) then
+      return nil;
+   end
+
+   return 1;
+end
+
+function WhoHasMod.MaybeWarnMissingBackend()
+   if (WhoHasMod.state.warnedMissingBackend) then
+      return;
+   end
+
+   if (not WhoHasMod.HasUsableBackend()) then
+      WhoHasMod.state.warnedMissingBackend = 1;
+      WhoHasMod.Print("requires Possessions to show item ownership. Install/enable Possessions and log into your characters to build data.");
+   end
 end
 
 function WhoHasMod.SlashCommand(msg)
@@ -96,6 +122,7 @@ function WhoHasMod.SlashCommand(msg)
    else
       local enabled = WhoHasMod.BoolText(WhoHasModConfig.enabled);
       WhoHasMod.Print("status enabled=" .. enabled .. ", totals=" .. WhoHasMod.BoolText(WhoHasModConfig.totals) .. ", stacks=" .. WhoHasMod.BoolText(WhoHasModConfig.stacks));
+      WhoHasMod.Print("backend possessions=" .. WhoHasMod.BoolText(WhoHasMod.HasUsableBackend()));
       WhoHasMod.Print("commands: /whohasmod on, off, totals, stacks");
    end
 end
