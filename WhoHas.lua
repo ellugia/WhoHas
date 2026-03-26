@@ -1,543 +1,271 @@
-WhoHasConfig = {
-   enabled   = 1,
-   totals    = 1,
-   stacks    = 1,
-   inbox     = 1,
-   keyring   = 1,
-   bags      = 1,
-   equipment = 1,
-   allfactions = nil
+WhoHasModConfig = WhoHasModConfig or {
+   enabled = 1,
+   totals = nil,
+   stacks = nil,
 }
 
-WhoHas = {}
+WhoHasMod = {}
 
-WhoHas.state = {
-   savedName = "";
-   player = "";
-   realm = "";
-   faction = "";
-   tooltipText = {};
-   altCache = {};
-   playerCache = {};
-   inventoryChanged = 1;
+WhoHasMod.state = {
+   player = "",
+   realm = "",
+   loaded = nil,
+   inventoryChanged = 1,
+   playerCache = {},
+   altCache = {},
 }
 
--- these are internal strings, not for display
-WhoHas.categories = {
+WhoHasMod.categories = {
    "Inventory",
    "Bank",
-   "Inbox",
-   "Keyring",
-   "Equipment",
-   "InvBags",
-   "BankBags",
 }
 
--------------------------------------------------------------------------------
--- Utility
--------------------------------------------------------------------------------
+WhoHasMod.formats = {
+   Inventory = "%u in %s's inventory",
+   Bank = "%u in %s's bank",
+   total = "%u total",
+   stack = "Stack size: %u",
+}
 
-function WhoHas.camelCase(word)
-  return string.gsub(word,"(%a)([%w_']*)",function(head,tail) 
-    return string.format("%s%s",string.upper(head),string.lower(tail)) 
-    end)
+WhoHasMod.Poss = {
+   Inventory = { 0, 1, 2, 3, 4 },
+   Bank = { -1, 5, 6, 7, 8, 9, 10, 11 },
+}
+
+function WhoHasMod.Print(msg)
+   if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99WhoHas [MOD]|r " .. msg);
+   end
 end
 
--------------------------------------------------------------------------------
--- OnLoad
--------------------------------------------------------------------------------
+function WhoHasMod.OnLoad()
+   SlashCmdList["WHOHASMOD"] = WhoHasMod.SlashCommand;
+   SLASH_WHOHASMOD1 = "/whohasmod";
+   SLASH_WHOHASMOD2 = "/whm";
 
-function WhoHas.OnLoad()
-   SlashCmdList["WHOHAS"] = WhoHas.ShowConfigFrame;
-   tinsert(UISpecialFrames, "WhoHasConfigFrame");
+   this:RegisterEvent("VARIABLES_LOADED");
+   this:RegisterEvent("PLAYER_LOGIN");
+   this:RegisterEvent("BAG_UPDATE");
+   this:RegisterEvent("UNIT_INVENTORY_CHANGED");
+   this:RegisterEvent("PLAYERBANKSLOTS_CHANGED");
+   this:RegisterEvent("BANKFRAME_OPENED");
 
-   if (PossessionsData) then
-      WhoHas.ScanAlts = WhoHas.ScanAltsPoss;
-      WhoHas.ScanPlayer = WhoHas.ScanPlayerPoss;
-      WhoHas.RefreshAlts = WhoHas.RefreshAltsPoss;
-   elseif (myProfile) then
-      WhoHas.ScanAlts = WhoHas.ScanAltsCP;
-      WhoHas.ScanPlayer = WhoHas.ScanPlayerCP;
-      WhoHas.RefreshAlts = WhoHas.RefreshAltsCP;
-   else
-      WhoHas.ScanAlts = WhoHas.DoNothing;
-      WhoHas.ScanPlayer = WhoHas.DoNothing;
-      WhoHas.RefreshAlts = WhoHas.DoNothing;
-   end
-
-   WhoHas.Orig_SetItemRef = SetItemRef
-   SetItemRef             = WhoHas.SetItemRef
-
-   WhoHas.Orig_SendMail   = SendMail
-   SendMail               = WhoHas.SendMail
-
-   WhoHas.Orig_ReturnInboxItem = ReturnInboxItem
-   ReturnInboxItem             = WhoHas.ReturnInboxItem
-
-   if (Baggins) then
-      Baggins.Orig_CreateItemButton = Baggins.CreateItemButton;
-      Baggins.CreateItemButton = WhoHas.Baggins_CreateItemButton;
-   end
+   WhoHasMod.Orig_SetItemRef = SetItemRef;
+   SetItemRef = WhoHasMod.SetItemRef;
 
    if (Possessions_ItemButton_OnEnter) then
-      WhoHas_Possessions_ItemButton_OnEnter = Possessions_ItemButton_OnEnter
-      Possessions_ItemButton_OnEnter        = WhoHas.Possessions_ItemButton_OnEnter
-   end
-
-   WhoHas.timerFrame = CreateFrame("FRAME")
-   for event in pairs(WhoHas.Events) do
-      this:RegisterEvent(event);
+      WhoHasMod_Orig_Possessions_ItemButton_OnEnter = Possessions_ItemButton_OnEnter;
+      Possessions_ItemButton_OnEnter = WhoHasMod.Possessions_ItemButton_OnEnter;
    end
 end
 
--------------------------------------------------------------------------------
--- Events
--------------------------------------------------------------------------------
-
-WhoHas.Events = {}
-
-function WhoHas.OnEvent()
-   local func = WhoHas.Events[event];
-   if (func) then
-      func(arg1, arg2);
-   end
-end
-
-function WhoHas.Events.PLAYER_LOGIN()
-   if UnitIsConnected("player") and WhoHas.state.loaded then
-      WhoHas.timeSinceLast = 0
-      WhoHas.timerFrame:SetScript("OnUpdate",function() WhoHas.DelayInit(arg1) end)
-      WhoHas.state.player = UnitName("player");
-      WhoHas.state.realm = GetRealmName();
-      WhoHas.state.faction = UnitFactionGroup("player");
-   end
-end
-
-function WhoHas.Events.VARIABLES_LOADED()
-   WhoHas.state.loaded = true
-end
-
-function WhoHas.DelayInit(elapsed)
-   WhoHas.timeSinceLast = WhoHas.timeSinceLast + elapsed
-   if WhoHas.timeSinceLast > 5 then
-      WhoHas.timeSinceLast = 0
-      WhoHas.timerFrame:SetScript("OnUpdate",nil)
-      WhoHas.ScanAlts();
-   end
-end
-
-function WhoHas.InventoryChanged()
-   WhoHas.state.inventoryChanged = 1;
-end
-
-WhoHas.Events.UNIT_INVENTORY_CHANGED = WhoHas.InventoryChanged;
-WhoHas.Events.BAG_UPDATE             = WhoHas.InventoryChanged;
-
--------------------------------------------------------------------------------
--- Hooks
--------------------------------------------------------------------------------
-
-function WhoHas.OnShow()
-   WhoHas.ShowTooltip(GameTooltip);
-end
-
-function WhoHas.SetItemRef(arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10,arg11)
-   WhoHas.Orig_SetItemRef(arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10,arg11)
-   WhoHas.ShowTooltip(ItemRefTooltip);
-end
-
-function WhoHas.Possessions_ItemButton_OnEnter(args)
-   -- don't doctor tooltips inside of Possessions
-   WhoHas.skip = true;
-   WhoHas_Possessions_ItemButton_OnEnter(args);
-   WhoHas.skip = nil;
-end
-
-function WhoHas.ShowConfigFrame()
-   WhoHasConfigFrame:Show()
-end
-
-function WhoHas.SendMail(target, subject, body)
-   WhoHas.Orig_SendMail(target, subject, body);
-   
-   -- proper-case the name
-   local properName
-   properName = WhoHas.camelCase(target);
-   if (WhoHas.state.altCache[properName]) then
-      for i = 1, 12 do
-         local item, _, qty, _ = GetSendMailItem(i);
-         if (item) then
-            WhoHas.state.altCache[properName][item] = WhoHas.state.altCache[properName][item] or {};
-            WhoHas.state.altCache[properName][item].Inbox = (WhoHas.state.altCache[properName][item].Inbox or 0) + qty;
-         end
+function WhoHasMod.OnEvent()
+   if (event == "VARIABLES_LOADED") then
+      WhoHasMod.state.loaded = 1;
+   elseif (event == "PLAYER_LOGIN") then
+      WhoHasMod.state.player = UnitName("player") or "";
+      WhoHasMod.state.realm = GetRealmName() or "";
+      WhoHasMod.state.inventoryChanged = 1;
+   elseif (event == "UNIT_INVENTORY_CHANGED") then
+      if (arg1 == "player") then
+         WhoHasMod.MarkDirty();
       end
+   else
+      WhoHasMod.MarkDirty();
    end
-   WhoHas.InventoryChanged()
 end
 
-function WhoHas.ReturnInboxItem(mailID)
-   local _, _, sender, _ = GetInboxHeaderInfo(mailID);
+function WhoHasMod.MarkDirty()
+   WhoHasMod.state.inventoryChanged = 1;
+end
 
-   sender = string.lower(sender);
-   if (WhoHas.state.altCache[sender]) then
-      for i = 1, 12 do
-         local item, _, qty, _ = GetInboxItem(mailID, i);
-         if (item) then
-            WhoHas.state.altCache[sender][item] = WhoHas.state.altCache[sender][item] or {};
-            WhoHas.state.altCache[sender][item].Inbox = (WhoHas.state.altCache[sender][item].Inbox or 0) + qty;
-         end
-      end
+function WhoHasMod.SlashCommand(msg)
+   msg = string.lower(msg or "");
+   if (msg == "on") then
+      WhoHasModConfig.enabled = 1;
+      WhoHasMod.Print("enabled");
+   elseif (msg == "off") then
+      WhoHasModConfig.enabled = nil;
+      WhoHasMod.Print("disabled");
+   elseif (msg == "totals") then
+      WhoHasModConfig.totals = not WhoHasModConfig.totals;
+      WhoHasMod.Print("show totals: " .. WhoHasMod.BoolText(WhoHasModConfig.totals));
+   elseif (msg == "stacks") then
+      WhoHasModConfig.stacks = not WhoHasModConfig.stacks;
+      WhoHasMod.Print("show stack size: " .. WhoHasMod.BoolText(WhoHasModConfig.stacks));
+   else
+      local enabled = WhoHasMod.BoolText(WhoHasModConfig.enabled);
+      WhoHasMod.Print("status enabled=" .. enabled .. ", totals=" .. WhoHasMod.BoolText(WhoHasModConfig.totals) .. ", stacks=" .. WhoHasMod.BoolText(WhoHasModConfig.stacks));
+      WhoHasMod.Print("commands: /whohasmod on, off, totals, stacks");
+   end
+end
+
+function WhoHasMod.BoolText(value)
+   if (value) then
+      return "on";
+   end
+   return "off";
+end
+
+function WhoHasMod.OnShow()
+   WhoHasMod.ShowTooltip(GameTooltip);
+end
+
+function WhoHasMod.SetItemRef(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
+   WhoHasMod.Orig_SetItemRef(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11);
+   WhoHasMod.ShowTooltip(ItemRefTooltip);
+end
+
+function WhoHasMod.Possessions_ItemButton_OnEnter()
+   WhoHasMod.skip = 1;
+   WhoHasMod_Orig_Possessions_ItemButton_OnEnter();
+   WhoHasMod.skip = nil;
+end
+
+function WhoHasMod.ShowTooltip(tooltip)
+   if (not tooltip or not WhoHasModConfig.enabled or WhoHasMod.skip) then
+      return;
    end
 
-   WhoHas.Orig_ReturnInboxItem(mailID);
-   WhoHas.InventoryChanged()
-end
-
--------------------------------------------------------------------------------
--- Test hooks - not used
--------------------------------------------------------------------------------
-
-function WhoHas.ResetCursor()
-   WhoHas.Orig_ResetCursor()
-   GameTooltip:AddLine("ResetCursor");
-   WhoHas.ShowTooltip(GameTooltip);
-end
-
-function WhoHas.CursorUpdate()
-   WhoHas.Orig_CursorUpdate()
-   GameTooltip:AddLine("CursorUpdate");
-   WhoHas.ShowTooltip(GameTooltip);
-end
-
-function WhoHas.OnUpdate(self, elapsed)
-   local owner = self:GetOwner();
-   if (owner and owner.UpdateTooltip and not owner.WhoHas_UpdateTooltip) then
-      owner.WhoHas_UpdateTooltip = owner.UpdateTooltip;
-      owner.UpdateTooltip = WhoHas.UpdateTooltip;
+   local name = WhoHasMod.GetTooltipItemName(tooltip);
+   if (not name or name == "") then
+      return;
    end
-   WhoHas.Orig_OnUpdate(self, elapsed);
-end
 
-function WhoHas.UpdateTooltip(self)
-   self:WhoHas_UpdateTooltip();
-   GameTooltip:AddLine("UpdateTooltip");
-   WhoHas.ShowTooltip(GameTooltip);
-end
+   if (WhoHasMod.state.inventoryChanged) then
+      WhoHasMod.ScanPlayerPoss();
+      WhoHasMod.state.inventoryChanged = nil;
+   end
 
-function WhoHas.SetInventoryItem(self, unit, slot, nameOnly)
-   WhoHas.Orig_SetInventoryItem(self, unit, slot, nameOnly);
-   GameTooltip:AddLine("SetInventoryItem");
-   WhoHas.ShowTooltip(self);
-end
+   local lines = {};
+   WhoHasMod.GetText(name, lines);
 
-function WhoHas.SetBagItem(self, bag, slot)
-   WhoHas.Orig_SetBagItem(self, bag, slot);
-   GameTooltip:AddLine("SetBagItem");
-   WhoHas.ShowTooltip(self);
-end
-
--------------------------------------------------------------------------------
--- Baggins support
--------------------------------------------------------------------------------
-
--- Nasty Baggins hacks here
-
--- Baggins doesn't really need the periodic UpdateTooltip
--- as far as I can tell.  When it's called, it wipes out
--- the current tooltip, which no other UpdateTooltip seems to do.
--- Any method I try to use to restore the tooltip results in everything
--- *except* Baggins getting the tooltip info twice.
--- So, here we hijack the original Baggins UpdateTooltip method and rename
--- it, so that GameTooltip doesn't call it.  But we need to leave
--- a method named UpdateTooltip in place for the Baggins
--- OnEnter handler.  And we also have to hook the original OnEnter
--- handler to call the renamed UpdateTooltip function.
-
-function WhoHas.Baggins_CreateItemButton(self, sectionframe, item)
-   local button = self:Orig_CreateItemButton(sectionframe, item);
-   button.OrigOnEnter = button:GetScript("OnEnter");
-   button:SetScript("OnEnter", WhoHas.Baggins_OnEnter);
-   button.OrigUpdateTooltip = button.UpdateTooltip;
-   button.UpdateTooltip = WhoHas.DoNothing;
-   return button;
-end
-
-function WhoHas.Baggins_OnEnter(button)
-   button = button or this;
-   button:OrigOnEnter();
-   button:OrigUpdateTooltip();
-end
-
--------------------------------------------------------------------------------
--- Tooltip display
--------------------------------------------------------------------------------
-
-function WhoHas.ShowTooltip(tooltip, link)
-   if (tooltip and WhoHasConfig.enabled and not WhoHas.skip) then
-      local name = getglobal(tooltip:GetName().."TextLeft1"):GetText();
-      if (not name or name == "") then
-         return;
-      end
-
-      if (WhoHas.state.inventoryChanged) then
-         WhoHas.ScanPlayer();
-         WhoHas.state.inventoryChanged = nil;
-         WhoHas.state.savedName = "";
-      end
-
-      if (name ~= WhoHas.state.savedName) then
-         WhoHas.state.tooltipText = {};
-         WhoHas.state.savedName = name;
-         WhoHas.GetText(name, WhoHas.state.tooltipText);
-      end
-
-      for i, line in ipairs(WhoHas.state.tooltipText) do
+   if (getn(lines) > 0) then
+      tooltip:AddLine(" ");
+      for _, line in ipairs(lines) do
          tooltip:AddLine(line);
       end
       tooltip:Show();
    end
 end
 
-function WhoHas.GetText(name, text)
-   local total = WhoHas.ListOwners(name, text);
-   if (WhoHasConfig.totals and total > 0) then
-      table.insert(text, string.format(WhoHas.formats.total, total));
+function WhoHasMod.GetTooltipItemName(tooltip)
+   local tooltipName = tooltip:GetName();
+   if (not tooltipName) then
+      return nil;
    end
-   if (WhoHasConfig.stacks) then
-      local itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount, itemEquipLoc, invTexture = GetItemInfo(name);
-      if (itemStackCount and itemStackCount > 1) then
-         table.insert(text, string.format(WhoHas.formats.stack, itemStackCount));
+
+   local leftText = getglobal(tooltipName .. "TextLeft1");
+   if (leftText) then
+      return leftText:GetText();
+   end
+
+   return nil;
+end
+
+function WhoHasMod.GetText(name, text)
+   local total = WhoHasMod.ListOwners(name, text);
+
+   if (WhoHasModConfig.totals and total > 0) then
+      table.insert(text, string.format(WhoHasMod.formats.total, total));
+   end
+
+   if (WhoHasModConfig.stacks) then
+      local _, _, _, _, _, _, _, stackCount = GetItemInfo(name);
+      if (stackCount and stackCount > 1) then
+         table.insert(text, string.format(WhoHasMod.formats.stack, stackCount));
       end
    end
 end
 
-function WhoHas.ListOwners(name, text)
+function WhoHasMod.ListOwners(name, text)
    local total = 0;
-   if (WhoHas.state.playerCache[name]) then
-      total = total + WhoHas.ListChar(WhoHas.state.player, WhoHas.state.playerCache[name], text);
-   end
-   for charName, charData in pairs(WhoHas.state.altCache) do
-      if (charData[name]) then
-         total = total + WhoHas.ListChar(charName, charData[name], text);
-      end
-   end
-   return total;
-end
+   local charData = WhoHasMod.state.playerCache[name];
 
-function WhoHas.ListChar(charName, charData, text)
-   local total = 0;
-   for i, category in ipairs(WhoHas.categories) do
-      local count = charData[category];
-      if count and count > 0 then
-         table.insert(text, string.format(WhoHas.formats[category], count, charName));
-         total = total + count;
-      end
-   end
-   return total;
-end
-
--------------------------------------------------------------------------------
--- Possessions support
--------------------------------------------------------------------------------
-
-WhoHas.Poss = {}
-WhoHas.Poss.Lauchsuppe = {
-   Inventory = { 0, 1, 2, 3, 4 },
-   Bank      = { -1, 5, 6, 7, 8, 9, 10, 11 },
-   Keyring   = { -2 },
-   Equipment = { -3 },
-   Inbox     = { -4 },
-   InvBags   = { -5 },
-   BankBags  = { -6 }
-}
-
-WhoHas.Poss.Siz = {
-   Inventory = { 0, 1, 2, 3, 4 },
-   Bank      = { -1, 5, 6, 7, 8, 9, 10, 11 },
-   Equipment = { -2 },
-   Inbox     = { -3 },
-   Keyring   = { -4 }
-}
-
-function WhoHas.ScanPlayerPoss()
-   local slots;
-
-   if (POSS_USEDBANKBAGS_CONTAINER) then
-      slots = WhoHas.Poss.Lauchsuppe;
-   else
-      slots = WhoHas.Poss.Siz;
-   end
-
-   local charData;
-   if (PossessionsData and PossessionsData[WhoHas.state.realm]) then
-      charData = PossessionsData[WhoHas.state.realm][string.lower(WhoHas.state.player)];
-   end
    if (charData) then
-      WhoHas.state.playerCache = {};
-      WhoHas.ScanCharPoss(WhoHas.state.player, charData, slots, WhoHas.state.playerCache);
+      for _, category in ipairs(WhoHasMod.categories) do
+         local count = charData[category];
+         if (count and count > 0) then
+            table.insert(text, string.format(WhoHasMod.formats[category], count, WhoHasMod.state.player));
+            total = total + count;
+         end
+      end
    end
-end
 
-function WhoHas.ScanAltsPoss()
-   local slots;
-
-   if (POSS_USEDBANKBAGS_CONTAINER) then
-      slots = WhoHas.Poss.Lauchsuppe;
-   else
-      slots = WhoHas.Poss.Siz;
-   end
-   local properName
-   local realm = tostring(WhoHas.state.realm)
-   if (PossessionsData and PossessionsData[realm] and next(PossessionsData[realm])) then
-      for charName, charData in pairs(PossessionsData[realm]) do
-         if (charName and charData and (WhoHasConfig.allfactions or charData.faction == WhoHas.state.faction)) then
-            -- Possessions lower-cases character names, annoyingly
-            properName = WhoHas.camelCase(charName);
-            if (properName ~= WhoHas.state.player) then
-               WhoHas.state.altCache[properName] = {};
-               WhoHas.ScanCharPoss(properName, charData, slots, WhoHas.state.altCache[properName]);
+   for charName, altData in pairs(WhoHasMod.state.altCache) do
+      local itemData = altData[name];
+      if (itemData) then
+         for _, category in ipairs(WhoHasMod.categories) do
+            local count = itemData[category];
+            if (count and count > 0) then
+               table.insert(text, string.format(WhoHasMod.formats[category], count, charName));
+               total = total + count;
             end
          end
       end
    end
+
+   return total;
 end
 
-function WhoHas.RefreshAltsPoss()
-   local slots;
+function WhoHasMod.ScanPlayerPoss()
+   WhoHasMod.state.playerCache = {};
+   WhoHasMod.state.altCache = {};
 
-   if (POSS_USEDBANKBAGS_CONTAINER) then
-      slots = WhoHas.Poss.Lauchsuppe;
-   else
-      slots = WhoHas.Poss.Siz;
+   if (not PossessionsData or not WhoHasMod.state.realm or WhoHasMod.state.realm == "") then
+      return;
    end
 
-   if (WhoHas.state.altsChanged and PossessionsData and PossessionsData[WhoHas.state.realm]) then
-      for i, charName in ipairs(WhoHas.state.altsChanged) do
-         local charData = PossessionsData[WhoHas.state.realm][string.lower(charName)];
-         if (charData) then
-            WhoHas.state.altCache[charName] = {};
-            WhoHas.ScanCharPoss(charName, charData, slots, WhoHas.state.altCache[charName]);
+   local realmData = PossessionsData[WhoHasMod.state.realm];
+   if (not realmData) then
+      return;
+   end
+
+   local playerName = string.lower(WhoHasMod.state.player or "");
+   if (playerName == "") then
+      return;
+   end
+
+   for charKey, charData in pairs(realmData) do
+      if (charData and charData.items) then
+         local cache;
+         if (charKey == playerName) then
+            cache = WhoHasMod.state.playerCache;
+         else
+            local displayName = WhoHasMod.GetDisplayName(charKey);
+            WhoHasMod.state.altCache[displayName] = WhoHasMod.state.altCache[displayName] or {};
+            cache = WhoHasMod.state.altCache[displayName];
          end
+
+         WhoHasMod.ScanBagsPoss("Inventory", charData.items, WhoHasMod.Poss.Inventory, cache);
+         WhoHasMod.ScanBagsPoss("Bank", charData.items, WhoHasMod.Poss.Bank, cache);
       end
    end
 end
 
-function WhoHas.ScanCharPoss(charName, charData, slots, cache)
-   if (charData and charData.items) then
-      WhoHas.ScanBagsPoss(charName, "Inventory", charData.items, slots.Inventory, cache);
-      WhoHas.ScanBagsPoss(charName, "Bank", charData.items, slots.Bank, cache);
-      if (WhoHasConfig.inbox) then
-         WhoHas.ScanBagsPoss(charName, "Inbox", charData.items, slots.Inbox, cache);
-      end
-      if (WhoHasConfig.keyring) then
-         WhoHas.ScanBagsPoss(charName, "Keyring", charData.items, slots.Keyring, cache);
-      end
-      if (WhoHasConfig.equipment) then
-         WhoHas.ScanBagsPoss(charName, "Equipment", charData.items, slots.Equipment, cache);
-      end
-      if (WhoHasConfig.bags and slots.InvBags) then
-         WhoHas.ScanBagsPoss(charName, "InvBags", charData.items, slots.InvBags, cache);
-      end
-      if (WhoHasConfig.bags and slots.BankBags) then
-         WhoHas.ScanBagsPoss(charName, "BankBags", charData.items, slots.BankBags, cache);
-      end
-   end
+function WhoHasMod.GetDisplayName(charKey)
+   return string.gsub(charKey, "(%a)([%w_']*)", function(head, tail)
+      return string.upper(head) .. string.lower(tail);
+   end);
 end
 
-function WhoHas.ScanBagsPoss(char, slot, bags, bagIndex, cache)
+function WhoHasMod.ScanBagsPoss(category, bags, bagIndex, cache)
    for _, index in pairs(bagIndex) do
-      if (bags[index]) then
-         for i, item in pairs(bags[index]) do
+      local bag = bags[index];
+      if (bag) then
+         for _, item in pairs(bag) do
             if (item and item[1]) then
                local name = item[1];
                local count = item[3] or 1;
+
                if (not cache[name]) then
                   cache[name] = {};
                end
-               cache[name][slot] = count + (cache[name][slot] or 0);
+
+               local current = cache[name][category] or 0;
+               cache[name][category] = current + count;
             end
          end
       end
    end
-end
-
--------------------------------------------------------------------------------
--- CharacterProfiler support
--------------------------------------------------------------------------------
-
-function WhoHas.ScanPlayerCP()
-   local charData;
-   if (myProfile and myProfile[WhoHas.state.realm] and myProfile[WhoHas.state.realm].Character) then
-      charData = myProfile[WhoHas.state.realm].Character[WhoHas.state.player];
-   end
-   if (charData) then
-      WhoHas.state.playerCache = {};
-      WhoHas.doBagsCP(charName, charData.Inventory, "Inventory", WhoHas.formats.Inventory, WhoHas.state.playerCache);
-      WhoHas.doBagsCP(charName, charData.Bank, "Bank", WhoHas.formats.Bank, WhoHas.state.playerCache);
-      WhoHas.doInboxCP(charName, charData.MailBox, "Inbox", WhoHas.formats.Inbox, WhoHas.state.playerCache);
-   end
-end
-
-function WhoHas.ScanAltsCP()
-   if (myProfile and myProfile[WhoHas.state.realm] and myProfile[WhoHas.state.realm].Character) then
-      for charName, charData in pairs(myProfile[WhoHas.state.realm].Character) do
-         if (charName ~= WhoHas.state.player and (WhoHasConfig.allfactions or charData and charData.FactionEn == WhoHas.state.faction)) then
-            WhoHas.state.altCache[charName] = {};
-            WhoHas.doBagsCP(charName, charData.Inventory, "Inventory", WhoHas.formats.Inventory, WhoHas.state.altCache[charName]);
-            WhoHas.doBagsCP(charName, charData.Bank, "Bank", WhoHas.formats.Bank, WhoHas.state.altCache[charName]);
-            WhoHas.doInboxCP(charName, charData.MailBox, "Inbox", WhoHas.formats.Inbox, WhoHas.state.altCache[charName]);
-         end
-      end
-   end
-end
-
-function WhoHas.RefreshAltsCP()
-   if (WhoHas.state.altsChanged and myProfile and myProfile[WhoHas.state.realm] and myProfile[WhoHas.state.realm].Character) then
-      for i, charName in ipairs(WhoHas.state.altsChanged) do
-         local charData = myProfile[WhoHas.state.realm].Character[charName];
-         WhoHas.state.altCache[charName] = {};
-         WhoHas.doBagsCP(charName, charData.Inventory, "Inventory", WhoHas.formats.Inventory, WhoHas.state.altCache[charName]);
-         WhoHas.doBagsCP(charName, charData.Bank, "Bank", WhoHas.formats.Bank, WhoHas.state.altCache[charName]);
-         WhoHas.doInboxCP(charName, charData.MailBox, "Inbox", WhoHas.formats.Inbox, WhoHas.state.altCache[charName]);
-      end
-   end
-end
-
-function WhoHas.doBagsCP(char, bags, slot, format, cache)
-   if (bags) then
-      for bag, bagData in pairs(bags) do
-         if (bagData.Slots) then
-            for i = 1, bagData.Slots do
-               local item = bagData.Contents[i]
-               if (item and item.Name) then
-                  local count = item.Quantity or 1;
-                  if (not cache[item.Name]) then
-                     cache[item.Name] = {};
-                  end
-                  cache[item.Name][slot] = count + (cache[item.Name][slot] or 0);
-               end
-            end
-         end
-      end
-   end
-end
-
-function WhoHas.doInboxCP(char, inbox, slot, format, cache)
-   if (inbox) then
-      for i, msg in ipairs(inbox) do
-         if (msg) then
-            local item = msg.Item;
-            if (item and item.Name) then
-               local count = item.Quantity or 1;
-               if (not cache[item.Name]) then
-                  cache[item.Name] = {};
-               end
-               cache[item.Name][slot] = count + (cache[item.Name][slot] or 0);
-            end
-         end
-      end
-   end
-end
-
-function WhoHas.DoNothing()
 end

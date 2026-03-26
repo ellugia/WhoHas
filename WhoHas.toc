@@ -1,15 +1,11 @@
 ## Interface: 11200
-## Title: WhoHas
-## Version: 2.3.3
-## Author: Gruma
-## X-Credits: Roadblock - backport and fix for Vanilla 1.12.1
-## Notes: Modifies the tooltip to show who has item in it.
-## SavedVariables: WhoHasConfig
-## OptionalDeps: CharacterProfiler, Possessions, Baggins, myAddons, SellValue
+## Title: WhoHas [MOD]
+## Version: 2.3.3-mod
+## Author: Gruma, Roadblock, Codex
+## Notes: Adds Possessions bag and bank counts to chat item tooltips for the current character and stored alts.
+## SavedVariables: WhoHasModConfig
+## OptionalDeps: Possessions
 ## RequiredDeps:
-## X-Date: November 23, 2007
-## X-Email: gruma@pobox.com
-## X-Website:
+## X-Date: March 26, 2026
 ## X-Category: MYADDONS_CATEGORY_INVENTORY
-## X-OptionsFrame: WhoHasConfigFrame
 WhoHas.xml

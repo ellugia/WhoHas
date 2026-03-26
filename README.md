@@ -1,12 +1,21 @@
-# WhoHas
-Tooltip WoW Addon showing item counts and other info (vanilla)
+# WhoHas [MOD]
 
-## Dependencies
-Requires a compatible inventory scanner as data source (CharacterProfiler, Possessions, Baggins or SellValue)
+Variant focused on Turtle WoW / WoW 1.12 item tooltips opened from chat.
 
-## Download
-Get WhoHas-x.yy-11200.zip from [latest](https://github.com/Road-block/WhoHas/releases/latest).  
-The release package contains a compatible [Possessions](https://github.com/Road-block/Possessions) addon.
+## Behavior
+- Reads item ownership data from `PossessionsData`.
+- Shows counts for the current character and stored alts on the same realm.
+- Shows only inventory/bags and bank counts.
+- Prioritizes the item card opened by clicking an item link in chat (`ItemRefTooltip`).
+- Inserts a blank separator line before the ownership section when matches are found.
+- Keeps the basic hover behavior when the normal tooltip path still fires.
 
-## Usage
-Extract both WhoHas and Possessions to your AddOns folder and use `/whohas` for options, or `/poss` for browsing items.
+## Slash commands
+- `/whohasmod`
+- `/whm`
+
+Supported options:
+- `on`
+- `off`
+- `totals`
+- `stacks`
