@@ -6,6 +6,10 @@ WhoHasModConfig = WhoHasModConfig or {
 
 WhoHasMod = {}
 
+WhoHasMod.name = "WhoHas";
+WhoHasMod.defaultVersion = "0.2";
+WhoHasMod.version = WhoHasMod.defaultVersion;
+
 WhoHasMod.state = {
    player = "",
    realm = "",
@@ -14,6 +18,7 @@ WhoHasMod.state = {
    playerCache = {},
    altCache = {},
    warnedMissingBackend = nil,
+   reportedBackendReady = nil,
 }
 
 WhoHasMod.categories = {
@@ -35,11 +40,13 @@ WhoHasMod.Poss = {
 
 function WhoHasMod.Print(msg)
    if DEFAULT_CHAT_FRAME then
-      DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99WhoHas [MOD]|r " .. msg);
+      DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99" .. WhoHasMod.name .. "|r " .. msg);
    end
 end
 
 function WhoHasMod.OnLoad()
+   WhoHasMod.version = WhoHasMod.GetVersion();
+
    SlashCmdList["WHOHASMOD"] = WhoHasMod.SlashCommand;
    SLASH_WHOHASMOD1 = "/whohasmod";
    SLASH_WHOHASMOD2 = "/whm";
@@ -67,7 +74,7 @@ function WhoHasMod.OnEvent()
       WhoHasMod.state.player = UnitName("player") or "";
       WhoHasMod.state.realm = GetRealmName() or "";
       WhoHasMod.state.inventoryChanged = 1;
-      WhoHasMod.MaybeWarnMissingBackend();
+      WhoHasMod.ReportBackendStatus();
    elseif (event == "UNIT_INVENTORY_CHANGED") then
       if (arg1 == "player") then
          WhoHasMod.MarkDirty();
@@ -81,6 +88,17 @@ function WhoHasMod.MarkDirty()
    WhoHasMod.state.inventoryChanged = 1;
 end
 
+function WhoHasMod.GetVersion()
+   if (GetAddOnMetadata) then
+      local version = GetAddOnMetadata(WhoHasMod.name, "Version");
+      if (version and version ~= "") then
+         return version;
+      end
+   end
+
+   return WhoHasMod.defaultVersion;
+end
+
 function WhoHasMod.HasUsableBackend()
    if (not PossessionsData or not WhoHasMod.state.realm or WhoHasMod.state.realm == "") then
       return nil;
@@ -92,6 +110,18 @@ function WhoHasMod.HasUsableBackend()
    end
 
    return 1;
+end
+
+function WhoHasMod.ReportBackendStatus()
+   if (WhoHasMod.HasUsableBackend()) then
+      if (not WhoHasMod.state.reportedBackendReady) then
+         WhoHasMod.state.reportedBackendReady = 1;
+         WhoHasMod.Print("Possessions detected. Item ownership is ready.");
+      end
+      return;
+   end
+
+   WhoHasMod.MaybeWarnMissingBackend();
 end
 
 function WhoHasMod.MaybeWarnMissingBackend()
@@ -121,7 +151,7 @@ function WhoHasMod.SlashCommand(msg)
       WhoHasMod.Print("show stack size: " .. WhoHasMod.BoolText(WhoHasModConfig.stacks));
    else
       local enabled = WhoHasMod.BoolText(WhoHasModConfig.enabled);
-      WhoHasMod.Print("status enabled=" .. enabled .. ", totals=" .. WhoHasMod.BoolText(WhoHasModConfig.totals) .. ", stacks=" .. WhoHasMod.BoolText(WhoHasModConfig.stacks));
+      WhoHasMod.Print("status version=" .. WhoHasMod.version .. ", enabled=" .. enabled .. ", totals=" .. WhoHasMod.BoolText(WhoHasModConfig.totals) .. ", stacks=" .. WhoHasMod.BoolText(WhoHasModConfig.stacks));
       WhoHasMod.Print("backend possessions=" .. WhoHasMod.BoolText(WhoHasMod.HasUsableBackend()));
       WhoHasMod.Print("commands: /whohasmod on, off, totals, stacks");
    end

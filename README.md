@@ -21,6 +21,7 @@ Initial Turtle WoW / WoW 1.12 release focused on item tooltips opened from chat.
 - Inserts a blank separator line before the ownership section when matches are found.
 - Keeps the basic hover behavior when the normal tooltip path still fires.
 - Prints a one-time chat warning if `Possessions` is missing or has not produced usable data yet.
+- Prints a one-time chat message when `Possessions` is detected and item ownership data is ready.
 
 ## Slash commands
 - `/whohasmod`
