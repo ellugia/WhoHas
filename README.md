@@ -4,11 +4,13 @@ Initial Turtle WoW / WoW 1.12 release focused on item tooltips opened from chat.
 
 ## Credits
 - `ellugia` for this release and current maintenance.
-- `road-block` for prior WhoHas maintenance work that informed this variant.
-- `refaim` for `Possessions`, which provides the ownership data backend used by this addon.
+- `road-block` for the `WhoHas` repository this addon is based on: https://github.com/Road-block/WhoHas
+- `refaim` for the `Possessions` repository used as the ownership-data backend: https://github.com/refaim/Possessions
+- `road-block` for the earlier `Possessions` fork that `refaim/Possessions` builds on: https://github.com/Road-block/Possessions
 
 ## Dependency
 - [Possessions](https://github.com/refaim/Possessions) is required to provide item ownership data.
+- The backend in use is `refaim/Possessions`, which itself comes from the earlier `Road-block/Possessions` fork.
 - Without `Possessions`, the addon can still hook tooltips but it cannot display ownership lines.
 
 ## Behavior

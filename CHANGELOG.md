@@ -1,5 +1,10 @@
 # Changelog
 
+Attribution lineage for this release:
+- `WhoHas` is based on https://github.com/Road-block/WhoHas
+- `Possessions` is used from https://github.com/refaim/Possessions
+- `refaim/Possessions` comes from the earlier fork at https://github.com/Road-block/Possessions
+
 ## 2026-03-26 - WhoHas 0.1
 
 ### Added

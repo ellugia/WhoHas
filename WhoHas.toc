@@ -3,6 +3,7 @@
 ## Version: 0.1
 ## Author: ellugia
 ## X-Credits: road-block, refaim
+## X-Source: Based on Road-block/WhoHas; uses refaim/Possessions derived from Road-block/Possessions
 ## Notes: Shows Possessions bag and bank counts in item tooltips for the current character and same-realm alts.
 ## SavedVariables: WhoHasModConfig
 ## OptionalDeps: Possessions
