@@ -5,6 +5,21 @@ Attribution lineage for this release:
 - `Possessions` is used from https://github.com/refaim/Possessions
 - `refaim/Possessions` comes from the earlier fork at https://github.com/Road-block/Possessions
 
+## 2026-03-26 - WhoHas 0.2
+
+### Added
+- A one-time chat message when `Possessions` is detected and item ownership data is ready.
+- Version reporting in `/whohasmod` status output, sourced from addon metadata with a safe fallback.
+
+### Changed
+- Bumped the public addon version from `0.1` to `0.2`.
+- Updated the chat prefix from `WhoHas [MOD]` to `WhoHas`.
+- Clarified credits and source lineage in project documentation and addon metadata.
+
+### Documentation
+- Documented the successful backend-ready startup message in `README.md`.
+- Simplified the `Codex` development-assistant note in `README.md`.
+
 ## 2026-03-26 - WhoHas 0.1
 
 ### Added
