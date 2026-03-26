@@ -33,4 +33,4 @@ Supported options:
 - `stacks`
 
 ## Development note
-This version was developed with Codex as a development assistant. Codex is not part of the addon author metadata.
+This version was developed with Codex as a development assistant.
